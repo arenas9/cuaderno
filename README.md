@@ -14,4 +14,4 @@ Hola! En el repositorio "cuaderno" está el trabajo hecho durante las prácticas
     - 2026-04-21: Práctica 10. Ensamblaje de genomas con lecturas de PacBio de alta fidelidad
     - 2026-04-28: Práctica 11. Anotación estructural
     - 2026-05-05: Práctica 12. Análisis de expresión diferencial
-Además, he creado un repositorio llamado website y la página web con todas las prácticas se puede visitar [aquí](https://arenas9.github.io/web-bioinfo/)
+Además, he creado un repositorio llamado website y la página web con todas las prácticas se puede visitar en ese repositorio.
