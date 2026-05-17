@@ -176,3 +176,110 @@ psiblast -help
 
 Evalue es el numero esperado de alineamientos con una puntuacion. Inclusion_ethresh define el valor umbral de evalor. Para hacer la busqueda mas sensible se repite el psiblasta hasta llegar a la convergencia
 :::
+
+# Ejercicio 3. Origen de la contaminación en un archivo FASTQ
+
+El archivo `contaminacion.fa.gz` contiene 33174 lecturas procedentes de un experimento de secuenciación del insecto Aphis aurantii, con Ion Torrent. Concretamente son las lecturas que no han podido mapearse al genoma de referencia (\[SRR13258790\] (https://www.ebi.ac.uk/ena/browser/view/SRR13258790) ). Concretamente son las lecturas que no han podido mapearse al genoma de referencia (\[GCA_055615905)\] (https://www.ebi.ac.uk/ena/browser/view/GCA_055615905)) de este insecto. Hay dos motivos principales por los que muchos fragmentos no pueden mapearse al genoma de referencia: o bien el genoma de referencia es incompleto, o bien los fragmentos no pertenecen a esa especie. La secuenciación no distingue al individuo de interés de sus simbiontes, parásitos o presas. Los fragmentos de ADN secuenciados que no proceden del individuo diana se consideran contaminación. El objetivo de este ejercicio es determinar la procedencia de estos fragmentos mediante BLASTN remoto a la base de datos nr (no redundante). Lo que nos interesa es sólo el origen taxonómico de la secuencia más parecida a cada una de esas lecturas.
+
+## Selección aleatoria de 20 queries
+
+Si enviamos 33174 queries a los servidores del NCBI, o bien tardarán muchas horas en devolver los resultados o simplemente interrumpirán el servicio. Cada persona escogerá 20 secuencias al azar mediante las órdenes siguientes, y después compartiremos los resultados para tener una muestra más representativa.
+
+```{r}
+library('Biostrings')
+unmapped <- readDNAStringSet('queries.fa')
+n <- length(unmapped)
+muestra <- unmapped[sample(1:n, 20)]
+writeXStringSet(muestra, 'muestra.fa')
+```
+
+
+
+## BLASTN remoto
+
+La orden siguiente pide una sola secuencia (la más parecida) y alguna información sobre el alineamiento, para poder garantizar la calidad del resultado.
+
+```{bash}
+if [ ! -e resultado.txt ]; then
+   blastn -query muestra.fa \
+          -db nr \
+          -out resultado.txt \
+          -outfmt '6 qaccver saccver length qlen qstart qend evalue bitscore staxid' \
+          -max_target_seqs 1 \
+          -evalue 0.001 \
+          -remote 2> /dev/null
+fi
+```
+
+## Identificación taxonómica
+
+La única información taxonómica que podemos obtener de las secuencias encontradas cuando realizamos un BLAST remoto es el identificador taxonómico. Esta restricción tiene por objetivo agilizar el servicio remoto. Ahora es asunto nuestro saber a qué especies corresponden los identificadores, de manera automática. Hay varias opciones. Para no tener que descargar la base de datos taxonómica, intentaremos recuperar la información completa con una nueva consulta remota. Esta vez, con los programas `datasets` y `dataformat` de NCBI, que ya conocéis.
+
+```{bash}
+# Extraemos los identificadores taxonómicos (columna 9) de "resultado.txt":
+cut -f 9 resultado.txt | sort | uniq | paste -sd ',' > taxids.txt
+
+# Generamos una tabla con información taxonómica de esos identificadores:
+datasets summary taxonomy taxon $(cat taxids.txt) --as-json-lines | \
+dataformat tsv taxonomy --template tax-summary > taxreport.txt
+```
+
+```{bash}
+cut -f 9 resultado.txt | sort | uniq | paste -sd ',' > taxids.txt
+datasets summary taxonomy taxon $(cat taxids.txt) --as-json-lines | \
+dataformat tsv taxonomy --template tax-summary > taxreport.txt
+```
+
+::: {.callout-note appearance="minimal" icon="false"}
+# Nota
+
+Puedes importar tanto los resultados del BLAST como el informe taxonómico a una sesión de R y determinar que fracción de las lecturas seleccionadas parecen proceder de un hemímptero y qué fracción proceden de otros organismos. Tienen sentido los resultados? Encuentras alguna secuencia de origen vegetal?
+
+Voy a hacerlo otra vez a ver si este me da bien o me da algo directamente
+
+```{bash}
+# Extraemos la columna 9 (TaxID), ordenamos y quitamos duplicados
+cut -f 9 resultado.txt | sort | uniq > taxids_lista.txt
+
+# Comprobamos qué IDs tenemos (deberías ver números como 1470492, 80765, etc.)
+cat taxids_lista.txt
+```
+
+```{bash}
+# Consultamos la taxonomía y la guardamos en formato TSV
+datasets summary taxonomy taxon --inputfile taxids_lista.txt --as-json-lines | \
+dataformat tsv taxonomy --template tax-summary > taxreport.txt
+
+# Verificamos que se haya escrito correctamente
+head taxreport.txt
+```
+
+```{r}
+# Leemos los resultados del BLAST
+blast <- read.table('resultado.txt',
+   col.names = c('qaccver', 'saccver', 'length', 'qlen',
+                 'qstart', 'qend', 'evalue', 'bitscore', 'staxid'))
+
+# Leemos el informe taxonómico (usamos quote="" para evitar que se cuelgue)
+taxreport <- read.table('taxreport.txt', sep = '\t', header = TRUE, fill = TRUE, quote = "")
+
+# Unimos las tablas para asignar el Orden y el Reino a cada hit
+blast$orden <- taxreport[match(blast$staxid, taxreport$Taxid), 'Order.name']
+blast$reino <- taxreport[match(blast$staxid, taxreport$Taxid), 'Kingdom.name']
+
+# CÁLCULOS 
+
+# 1. Fracción de Hemípteros
+hemipteros <- sum(blast$orden == 'Hemiptera', na.rm = TRUE)
+frac_hemipteros <- hemipteros / nrow(blast)
+
+# 2. Fracción de Plantas (Viridiplantae)
+plantas <- sum(blast$reino == 'Viridiplantae', na.rm = TRUE)
+frac_plantas <- plantas / nrow(blast)
+
+# --- RESULTADOS ---
+cat('Fracción hemípteros:', frac_hemipteros, '\n')
+cat('Fracción plantas:', frac_plantas, '\n')
+table(blast$orden)
+```
+:::
