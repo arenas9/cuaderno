@@ -255,10 +255,33 @@ ggplot(data = gwas, mapping = aes(x= CHROM, fill = ALLELES)) +
 :::{.callout-note icon=false}
 ## Desafíos
 1. Genera una nueva variable categórica en `gwas` que indique si el SNP es una
-transición (AG, GA, CT, TC) o una transversión (los otros) y comprueba con un
-diagrama de barras si las proporciones son comparables entre cromosomas.
-2. Mira también si existe relación entre el tipo de mutación y la frecuencia
-alélica.
+transición (AG, GA, CT, TC) o una transversión (los otros) y comprueba con undiagrama de barras si las proporciones son comparables entre cromosomas.
+
+```{r}
+transiciones <- c("AG", "GA", "CT", "TC")
+gwas$MUTATION <- ifelse(gwas$ALLELES %in% transiciones, "Transicion", "Transversión")
+```
+
+```{r}
+ggplot(data = gwas, mapping = aes(x = CHROM, fill = MUTATION)) +
+   geom_bar(position = "fill") +
+   labs(y = "Proporción", 
+        x = "Cromosoma", 
+        title = "Proporción de Transiciones vs Transversiones por Cromosoma") +
+   theme_minimal()
+```
+
+2. Mira también si existe relación entre el tipo de mutación y la frecuencia alélica.
+
+```{r}
+ggplot(data = gwas, 
+       mapping = aes(x = MUTATION, y = A1_FREQ, fill = MUTATION)) +
+   geom_boxplot(alpha = 0.7) +
+   labs(title = "Relación entre tipo de mutación y frecuencia del alelo A1",
+        x = "Tipo de Mutación",
+        y = "Frecuencia de A1 (A1_FREQ)") +
+   theme_minimal()
+```
 :::
 
 # Gráficas de volcán
@@ -296,11 +319,50 @@ ggplot(data = gwas,
 :::{.callout-note icon=false}
 ## Desafíos
 1. Genera una gráfica de volcán para cada cromosoma.
+
+
+```{r}
+
+library('ggplot2')
+library('qvalue')
+
+
+ggplot(data = gwas,
+       mapping = aes(x = BETA, y = -log(P), color = q)) +
+   geom_point(alpha = 0.5) + 
+   facet_wrap(~CHROM) +      
+   scale_color_gradient(name = 'FDR (Valor q)', 
+                        trans = 'log',
+                        breaks = c(0.001, 0.01, 0.1),
+                        low = 'red', high = 'gray') +
+   theme_minimal() +
+   labs(title = "Gráficas de Volcán por Cromosoma",
+        x = "Magnitud del Efecto (BETA)",
+        y = "-log(P-valor)")
+```
+
 2. El número de SNPs cuyo genotipo está significativamente asociado al fenotipo,
    ¿te parece elevado o bajo?
+   
+es un número bajo porque la mayoría de puntos son grises, lo que significa que la mayoría de SNPs no están significativamente asociados al fenotipo
+
 3. Escoge un umbral y clasifica los SNPs en "positivos" y "negativos", y explora
    la proporción de positivos por cromosoma. ¿Puedes hacerlo sin añadir una columna
    al marco de datos?
+   
+```{r}
+ggplot(data = gwas, 
+       mapping = aes(x = factor(q < 0.05, labels = c("Negativo", "Positivo")), 
+                     fill = q < 0.05)) +
+  geom_bar() +
+  facet_wrap(~CHROM) +
+  labs(title = "Clasificación de SNPs por Cromosoma",
+       x = "Resultado del Test",
+       y = "Número de SNPs (Conteo)",
+       fill = "Significativo") +
+  theme_bw() +
+  theme(legend.position = "none") # Quitamos la leyenda porque el eje X ya lo dice todo
+```
 :::
 
 # Gráfica de Manhattan
